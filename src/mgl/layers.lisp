@@ -1,66 +1,47 @@
 (in-package #:cl-transformer-blocks-mgl)
 
+;;; We assume:
+;;;  - cl-transformer-blocks:attention-layer has accessors:
+;;;      ATTENTION-W-Q, ATTENTION-W-K, ATTENTION-W-V, ATTENTION-W-O
+;;;  - cl-transformer-blocks:feedforward-layer has accessors:
+;;;      FFN-W1, FFN-W2
+;;;  - the MGL backend implements TB-MATMUL, TB-TRANSPOSE,
+;;;      TB-SOFTMAX, TB-GELU for MGL-MAT:MAT tensors.
+
 ;;; ------------------------------------------------------------
-;;; MGL-backed FORWARD implementations for the core layer types
+;;; Attention-layer forward for MGL backend
 ;;; ------------------------------------------------------------
 
-;; We assume:
-;;  - ATTENTION-LAYER and FEEDFORWARD-LAYER are the core classes defined
-;;    in the CL-TRANSFORMER-BLOCKS package (with slots W-Q, W-K, W-V,
-;;    W-O, W1, W2, etc.).
-;;  - MAT is MGL-MAT:MAT, imported or :USED in this package.
-;;  - TB-MATMUL and TB-GELU are already implemented for MAT in ops.lisp.
+(defmethod cl-transformer-blocks:forward
+    ((layer cl-transformer-blocks:attention-layer)
+     (x mgl-mat:mat))
+  "Backend implementation of self-attention for MGL-MAT tensors."
+  (let* ((w-q (cl-transformer-blocks:attention-w-q layer))
+         (w-k (cl-transformer-blocks:attention-w-k layer))
+         (w-v (cl-transformer-blocks:attention-w-v layer))
+         (w-o (cl-transformer-blocks:attention-w-o layer))
+         ;; Q, K, V projections
+         (q   (cl-transformer-blocks:tb-matmul w-q x))
+         (k   (cl-transformer-blocks:tb-matmul w-k x))
+         (v   (cl-transformer-blocks:tb-matmul w-v x))
+         ;; attention scores (very naive single-head version)
+         (scores  (cl-transformer-blocks:tb-matmul
+                   (cl-transformer-blocks:tb-transpose k)
+                   q))
+         (weights (cl-transformer-blocks:tb-softmax scores))
+         (ctx     (cl-transformer-blocks:tb-matmul v weights)))
+    (cl-transformer-blocks:tb-matmul w-o ctx)))
 
-(defmethod forward ((layer attention-layer) (x mat))
-  "Backend-specific FORWARD for ATTENTION-LAYER on MGL-MAT:MAT.
+;;; ------------------------------------------------------------
+;;; Feedforward-layer forward for MGL backend
+;;; ------------------------------------------------------------
 
-Currently a very simple placeholder:
-  y = W_O * x
-
-This preserves shape and lets us test block wiring. Later, you can
-replace this with full (multi-head) scaled dot-product self-attention
-using W-Q, W-K and W-V as well."
-  (let ((w-o (cl-transformer-blocks:attention-w-o layer)))
-    (tb-matmul w-o x))
-
-(defmethod forward ((layer cl-transformer-blocks:attention-layer)
-                    (x mat))
-  "Backend-specific FORWARD for ATTENTION-LAYER on MGL-MAT:MAT.
-
-Placeholder: y = W_O * x."
-  (let ((w-o (cl-transformer-blocks:attention-w-o layer)))
-    (tb-matmul w-o x)))
-
-(defmethod forward ((layer cl-transformer-blocks:feedforward-layer)
-                    (x mat))
-  "Backend-specific FORWARD for FEEDFORWARD-LAYER on MGL-MAT:MAT.
-
-Standard FFN: y = W2 * GELU(W1 * x)."
+(defmethod cl-transformer-blocks:forward
+    ((layer cl-transformer-blocks:feedforward-layer)
+     (x mgl-mat:mat))
+  "Backend implementation of position-wise feed-forward layer for MGL-MAT."
   (let* ((w1 (cl-transformer-blocks:ffn-w1 layer))
          (w2 (cl-transformer-blocks:ffn-w2 layer))
-         (h  (tb-gelu (tb-matmul w1 x))))
-    (tb-matmul w2 h)))
-
-
-
-  ;; NOTE: If you want to see something more realistic later, you'll do:
-  ;;   Q = W_Q * X
-  ;;   K = W_K * X
-  ;;   V = W_V * X
-  ;;   scores = softmax( (Q^T K) / sqrt(d_k) )
-  ;;   Y = W_O * (V * scores^T)
-  ;; but we'll keep the placeholder for now.
-  )
-
-(defmethod forward ((layer cl-transformer-blocks:feedforward-layer) (x mgl-mat:mat))
-  "Backend-specific FORWARD for FEEDFORWARD-LAYER on MGL-MAT:MAT.
-
-Standard Transformer FFN:
-  h = GELU(W1 * x)
-  y = W2 * h
-
-X is expected to be of shape [d_model, T]."
-  (let* ((w1 (cl-transformer-blocks:ffn-w1 layer))
-         (w2 (cl-transformer-blocks:ffn-w2 layer))
-         (h  (tb-gelu (tb-matmul w1 x))))
-    (tb-matmul w2 h)))
+         (h  (cl-transformer-blocks:tb-gelu
+              (cl-transformer-blocks:tb-matmul w1 x))))
+    (cl-transformer-blocks:tb-matmul w2 h)))

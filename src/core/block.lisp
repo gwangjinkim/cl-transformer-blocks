@@ -132,14 +132,18 @@ a backend helper (e.g. cl-transformer-blocks-mgl:MAKE-BLOCK)."
 ;;;   - TB-LAYER-NORM and TB-ADD are defined for the backend's tensor
 ;;;     representation.
         
-(defmethod forward ((blk transformer-block) x &rest args &key &allow-other-keys)
-  "Forward pass through a Transformer block using the TB-* protocol.
+;;; ------------------------------------------------------------
+;;; Block-level FORWARD methods (backend-agnostic)
+;;; ------------------------------------------------------------
 
-Pre-norm variant if BLOCK-USE-LAYER-NORM is true."
-  (declare (ignore args))
+(defmethod forward ((blk transformer-block) x)
+  "Forward pass through a Transformer block.
+
+All numeric work is delegated to backend implementations of FORWARD
+(for the attention/ffn layers) and TB-LAYER-NORM/TB-ADD."
   (labels ((maybe-ln (tensor)
              (if (block-use-layer-norm blk)
-                 ;; gamma / beta NIL: backend can use defaults
+                 ;; GAMMA/BETA = NIL: backend may use default parameters
                  (tb-layer-norm tensor nil nil)
                  tensor)))
     (let* (;; pre-norm before attention
@@ -153,13 +157,6 @@ Pre-norm variant if BLOCK-USE-LAYER-NORM is true."
       r2)))
 
 (defmethod forward ((stack block-list) x)
-  "Forward pass through a stack of blocks.
-
-Applies each block's FORWARD in sequence:
-
-  x_0 = x
-  x_{k+1} = FORWARD(block_k, x_k)
-
-Returns the output of the final block."
+  "Forward pass through a list of blocks, sequentially."
   (reduce #'forward (block-list-blocks stack)
           :initial-value x))
