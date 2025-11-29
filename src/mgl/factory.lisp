@@ -1,9 +1,20 @@
 ;;; Backend-specific constructors that actually create wheight matrices and wire up block + sublayers.
 
+;;; src/mgl/block.lisp
+
 (in-package #:cl-transformer-blocks-mgl)
+
+;;; ------------------------------------------------------------
+;;; FFN configuration
+;;; ------------------------------------------------------------
 
 (defparameter *default-ffn-multiplier* 4
   "Multiplier for the FFN hidden dimension: H = *DEFAULT-FFN-MULTIPLIER* * D.")
+
+;;; ------------------------------------------------------------
+;;; Backend-specific constructors that actually create weight
+;;; matrices and wire up block + sublayers.
+;;; ------------------------------------------------------------
 
 (defun make-attention-layer (model-dim)
   "Create an ATTENTION-LAYER with random initialized weights for MODEL-DIM."
@@ -23,10 +34,12 @@
                    :model-dim model-dim
                    :hidden-dim hidden-dim)))
 
-(defun make-block (model-dim &key (ffn-multiplier *default-ffn-multiplier*))
-  "Create a full TRANSFORMER-BLOCK (attention + FFN) with random parameters for MODEL-DIM."
+(defun make-block (model-dim &key (ffn-multiplier *default-ffn-multiplier*)
+                              (use-layer-norm t))
+  "Create a full TRANSFORMER-BLOCK (attention + FFN) with random parameters."
   (let* ((attn (make-attention-layer model-dim))
          (ffn  (make-feedforward-layer model-dim :multiplier ffn-multiplier)))
     (make-instance 'cl-transformer-blocks:transformer-block
                    :attention attn
-                   :ffn ffn)))
+                   :ffn       ffn
+                   :use-layer-norm use-layer-norm)))

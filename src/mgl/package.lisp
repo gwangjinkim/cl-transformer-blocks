@@ -1,5 +1,5 @@
 (defpackage #:cl-transformer-blocks-mgl
-  (:use #:cl #:cl-transformer-blocks)
+  (:use #:cl #:cl-transformer-blocks #:mgl-mat)
   (:nicknames #:tb-mgl)
   (:import-from #:mgl-mat
                 ;; type & construction

@@ -16,7 +16,8 @@
       ((:file "package")
        (:file "backend")
        (:file "factory")
-       (:file "ops")))))))
+       (:file "ops")
+       (:file "layers")))))))
 
 (asdf:defsystem "cl-transformer-blocks/tests"
   :description "Test suite for cl-transformer-blocks"
