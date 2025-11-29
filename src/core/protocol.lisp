@@ -41,5 +41,5 @@ DTYPE is a backend-specific element type or class (e.g., :FLOAT)."))
 
 ;;; Generic forward for all modules (Block, Block-List, etc.)
 
-(defgeneric forward (layer x)
+(defgeneric forward (layer x &key mask training-p)
   (:documentation "Forward pass for LAYER given input tensor X."))
