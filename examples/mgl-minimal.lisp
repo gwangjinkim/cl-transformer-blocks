@@ -1,0 +1,7 @@
+(let* ((d          32)
+       (time-steps 10)
+       (x          (tb-mgl:random-mat d time-steps))
+       (blk        (tb-mgl:make-block d))
+       (y          (cl-transformer-blocks:forward blk x)))
+  (format t "~&in shape:  ~a~%" (tb:tb-tensor-shape x))
+  (format t "out shape: ~a~%" (tb:tb-tensor-shape y)))
