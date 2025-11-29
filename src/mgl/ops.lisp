@@ -195,13 +195,13 @@ Currently AXIS is ignored; we always normalize each row independently."
      (mgl-mat:copy! x))
     ;; extreme: everything dropped -> zeros
     ((>= p 1.0d0)
-     (apply #'mgl-mat:zeros (mgl-mat:mat-dimensions x)))
+     (apply #'tb-zeros (mgl-mat:mat-dimensions x)))
     (t
      (let* ((dims (mgl-mat:mat-dimensions x))
             (rows (first dims))
             (cols (second dims))
             (y    (mgl-mat:copy! x))
-            (mask (apply #'mgl-mat:zeros dims)))
+            (mask (apply #'tb-zeros dims)))
        ;; fill mask with uniform [0,1)
        (mgl-mat:uniform-random! mask :limit 1.0d0)
        (let ((scale (/ 1.0d0 (- 1.0d0 p))))
