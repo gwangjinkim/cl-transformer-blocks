@@ -132,31 +132,30 @@ a backend helper (e.g. cl-transformer-blocks-mgl:MAKE-BLOCK)."
 ;;;   - TB-LAYER-NORM and TB-ADD are defined for the backend's tensor
 ;;;     representation.
         
-;;; ------------------------------------------------------------
-;;; Block-level FORWARD methods (backend-agnostic)
-;;; ------------------------------------------------------------
+;;; ---------- Backend-agnostic block forward ----------
 
-(defmethod forward ((blk transformer-block) x)
-  "Forward pass through a Transformer block.
-
-All numeric work is delegated to backend implementations of FORWARD
-(for the attention/ffn layers) and TB-LAYER-NORM/TB-ADD."
+(defmethod forward ((blk transformer-block) x &key mask training-p)
+  (declare (ignore mask))      ; we don't use MASK yet at block level
   (labels ((maybe-ln (tensor)
              (if (block-use-layer-norm blk)
-                 ;; GAMMA/BETA = NIL: backend may use default parameters
+                 ;; gamma/beta NIL → backend default
                  (tb-layer-norm tensor nil nil)
                  tensor)))
     (let* (;; pre-norm before attention
            (x-ln   (maybe-ln x))
-           (attn-y (forward (block-attention blk) x-ln))
+           (attn-y (forward (block-attention blk) x-ln
+                            :mask mask
+                            :training-p training-p))
            (r1     (tb-add x attn-y))
            ;; pre-norm before feed-forward
            (r1-ln  (maybe-ln r1))
-           (ffn-y  (forward (block-ffn blk) r1-ln))
+           (ffn-y  (forward (block-ffn blk) r1-ln
+                            :mask mask
+                            :training-p training-p))
            (r2     (tb-add r1 ffn-y)))
       r2)))
 
-(defmethod forward ((stack block-list) x)
-  "Forward pass through a list of blocks, sequentially."
-  (reduce #'forward (block-list-blocks stack)
-          :initial-value x))
+(defmethod forward ((stack block-list) x &key mask training-p)
+  (let ((result x))
+    (dolist (blk (block-list-blocks stack) result)
+      (setf result (forward blk result :mask mask :training-p training-p)))))

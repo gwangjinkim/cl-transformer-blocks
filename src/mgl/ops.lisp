@@ -1,279 +1,144 @@
 (in-package #:cl-transformer-blocks-mgl)
 
-;;; --------------------
-;;; protocol: allocation
-;;; --------------------
-
-(defmethod tb-zeros ((backend (eql :mgl)) dims &key (dtype :float))
-  "Create a zero-initialized MGL-MAT:MAT of shape DIMS.
-  
-BACKEND is ignored except for dispatch; it should be :MGL.
-DTYPE is passed to MGL-MAT:MAKE-MAT as CTYPE when it makes sense."
-  (declare (ignore backend))
-  ;; DIMS is e.g. (rows cols) or (d t b)
-  (mgl-mat:make-mat dims :ctype dtype :initial-element 0.0d0))
-
-
-;;; --------------------
-;;; basic allocation
-;;; --------------------
-
-
-(defun random-mat (rows cols &key (stddev 0.02d0))
-  "Create a ROWS x COLS MGL-MAT:MAT with small random values in [-SCALE, SCALE]."
-  (let ((m (tb:tb-zeros :mgl (list rows cols))))
-    (mgl-mat:gaussian-random! m :mean 0 :stddev stddev)
-    m))
-
-;; if you really want a uniform in [-sacle, scale], then do:
-
-;; (defun random-mat (rows cols &key (scale 0.02d0))
-;;   "Create a ROWS x COLS MGL-MAT:MAT with small random values in [-SCALE, SCALE]."
-;;   (let ((m (tb:tb-zeros :mgl (list rows cols))))
-;;     (mgl-mat:uniform-random! m :limit (* 2.0d0 scale))
-;;     ;; Shift to [-scale, scale).
-;;     (mgl-mat:.+! (- scale) m)
-;;     m))
-
-
-
-;;; --------------------
-;;; protocol: basic ops
-;;; --------------------
-
-;;; Implement the protocol generics for MGL-MAT:MAT
-
-(defmethod tb-tensor-shape ((x mat))
-  (mat-dimensions x))
-
-(defmethod tb-matmul ((a mat) (b mat))
-  "Matrix multiplication via GEMM (BLAS/cuBLAS)."
-  (mm* a b))
-
-(defmethod tb-add ((a mat) (b mat))
-  "Return a + b as a new MAT."
-  (let ((y (copy-mat a)))
-    (axpy! 1.0d0 b y)  ; y := y + 1.0 * b
-    y))
-
-(defmethod tb-add-scaled ((a mat) (b mat) scale)
-  "Return a + scale * b as a new MAT."
-  (let ((y (copy-mat a)))
-    (axpy! scale b y)
-    y))
-
-(defmethod tb-scale ((x mat) alpha)
-  "Return alpha * x as a new MAT."
-  (let ((y (copy-mat x)))
-    (scal! alpha y)
-    y))
-
-(defmethod tb-transpose ((x mat))
-  (transpose x))
-
-
-;; ;;; --------------------
-;; ;;; protocol: GELU
-;; ;;; --------------------
-
-;; (defmethod tb-gelu ((x mat))
-;;   "Elementwise approximate GELU on MAT."
-;;   (let* ((dims (mat-dimensions x))
-;;          (rows (first dims))
-;;          (cols (second dims))
-;;          (y    (copy-mat x)))
-;;     (dotimes (i rows)
-;;       (dotimes (j cols)
-;;         (let* ((v (mref y i j))
-;;                (u (/ v (sqrt 2.0d0)))
-;;                (g (* 0.5d0 v (+ 1.0d0 (erf u)))))
-;;           (setf (mref y i j) g))))
-;;     y))
-
 ;;; ------------------------------------------------------------
-;;; GELU (approximate, no ERF needed)
+;;; Helpers
 ;;; ------------------------------------------------------------
 
-(defun %gelu-approx (x)
-  "Approximate GELU using tanh-based formula (no ERF)."
-  ;; Hendrycks & Gimpel approximation:
-  ;; GELU(x) ≈ 0.5 * x * (1 + tanh(√(2/π) * (x + 0.044715 x^3)))
-  (let* ((c (/ (sqrt (* 2.0d0 pi))))           ; √(2/π)
-         (x3 (* x x x))
-         (inner (+ x (* 0.044715d0 x3)))
-         (tanh-arg (* c inner)))
-    (* 0.5d0 x (+ 1.0d0 (tanh tanh-arg)))))
+(defun %ensure-mat (x)
+  (assert (typep x 'mgl-mat:mat))
+  x)
 
-(defmethod tb-gelu ((x mat))
-  "Elementwise approximate GELU on MAT."
-  (let* ((dims (mat-dimensions x))
-         (rows (first dims))
-         (cols (second dims))
-         (y    (copy-mat x)))
-    (dotimes (i rows)
-      (dotimes (j cols)
-        (let ((v (mref y i j)))
-          (setf (mref y i j) (%gelu-approx v)))))
-    y))
+;;; ------------------------------------------------------------
+;;; Zero / shape
+;;; ------------------------------------------------------------
 
-;;; --------------------
-;;; protocol: softmax (2D, axis=-1)
-;;; --------------------
+(defmethod cl-transformer-blocks:tb-zeros ((backend (eql :mgl)) dims &key (dtype :float))
+  "Create an MGL-MAT:MAT of zeros with shape DIMS."
+  (declare (ignore dtype))
+  (apply #'mgl-mat:zeros dims))
 
-(defun %softmax-row! (m row)
-  "In-place softmax of ROW of M (2D MAT) using numerical stabilization."
-  (let* ((dims (mat-dimensions m))
-         (cols (second dims)))
-    ;; 1. max for numerical stability
-    (let ((max-val -1d300))
-      (dotimes (j cols)
-        (let ((v (mref m row j)))
-          (when (> v max-val)
-            (setf max-val v))))
-      ;; 2. exponentiate shifted values & accumulate sum
-      (let ((sum 0d0))
-        (dotimes (j cols)
-          (let* ((v  (mref m row j))
-                 (ev (exp (- v max-val))))
-            (setf (mref m row j) ev)
-            (incf sum ev)))
-        ;; 3. normalize
-        (dotimes (j cols)
-          (setf (mref m row j)
-                (/ (mref m row j) sum)))))))
+(defmethod cl-transformer-blocks:tb-tensor-shape ((x mgl-mat:mat))
+  "Return dimensions of an MGL-MAT:MAT as a list."
+  (mgl-mat:dimensions x))
 
-(defmethod tb-softmax ((x mat) &key (axis -1))
-  "Softmax over the last axis for 2D MATS. Returns a new MAT."
-  (unless (eql axis -1)
-    (error "tb-softmax (mgl): only AXIS = -1 is supported right now, got ~S"
-           axis))
-  (let* ((dims (mat-dimensions x)))
-    (unless (= (length dims) 2)
-      (error "tb-softmax (mgl): only 2D MATS supported, got dims ~S" dims))
-    (let* ((rows (first dims))
-           (y    (copy-mat x)))
-      (dotimes (i rows)
-        (%softmax-row! y i))
-      y)))
+;;; ------------------------------------------------------------
+;;; Basic ops
+;;; ------------------------------------------------------------
 
+(defmethod cl-transformer-blocks:tb-matmul ((a mgl-mat:mat) (b mgl-mat:mat))
+  (mgl-mat:matmul a b))
 
-;;; --------------------
-;;; protocol: layer-norm
-;;; --------------------
+(defmethod cl-transformer-blocks:tb-add ((a mgl-mat:mat) (b mgl-mat:mat))
+  (mgl-mat:+ a b))
 
-;;; This implementation only uses mat-dimensions, mref, copy-mat, make-mat (indirectly),
-;;; and has no mysterious MGL internals,
-;;; and it's correct enough for now. (later optimization with custom kernels possible).
+(defmethod cl-transformer-blocks:tb-add-scaled ((a mgl-mat:mat) (b mgl-mat:mat) scale)
+  ;; a + scale * b
+  (mgl-mat:+ a (mgl-mat:* scale b)))
 
+(defmethod cl-transformer-blocks:tb-scale ((x mgl-mat:mat) alpha)
+  (mgl-mat:* alpha x))
 
-(defun %layer-norm-row! (x out row gamma beta eps)
-  "Compute layer-norm for one ROW of X into OUT.
+(defmethod cl-transformer-blocks:tb-transpose ((x mgl-mat:mat))
+  (mgl-mat:transpose x))
 
-X, OUT are MGL-MAT:MATS of shape (rows x cols).
-GAMMA, BETA are either NIL or MATS of shape (1 x cols).
-EPS is a small float for numerical stability."
-  (let* ((dims (mat-dimensions x))
-         (cols (second dims)))
-    ;; 1. compute mean and variance for this row
-    (let ((sum 0d0)
-          (sumsq 0d0))
-      (dotimes (j cols)
-        (let ((v (mref x row j)))
-          (incf sum v)
-          (incf sumsq (* v v))))
-      (let* ((cols-d (coerce cols 'double-float))
-             (mean   (/ sum cols-d))
-             (var    (max eps (- (/ sumsq cols-d) (* mean mean))))
-             (inv-std (/ 1.0d0 (sqrt var))))
-        ;; 2. normalize and apply gamma/beta
-        (dotimes (j cols)
-          (let* ((v (mref x row j))
-                 (norm (* (- v mean) inv-std))
-                 (g (if gamma
-                        (mref gamma 0 j)
-                        1.0d0))
-                 (b (if beta
-                        (mref beta 0 j)
-                        0.0d0))
-                 (y (+ (* norm g) b)))
-            (setf (mref out row j) y)))))))
+;;; ------------------------------------------------------------
+;;; Softmax
+;;; ------------------------------------------------------------
 
-(defmethod tb-layer-norm ((x mat) gamma beta &key (eps 1e-5))
-  "Layer normalization over the last dimension (features) for 2D MATS.
+(defmethod cl-transformer-blocks:tb-softmax ((x mgl-mat:mat) &key axis)
+  (declare (ignore axis))
+  ;; We rely on MGL's softmax; for now treat as "softmax over last axis".
+  (mgl-mat:softmax x))
 
-X is (rows x cols). GAMMA and BETA are either NIL or (1 x cols) MATS
-(broadcast across rows)."
-  (let* ((dims (mat-dimensions x)))
-    (unless (= (length dims) 2)
-      (error "tb-layer-norm (mgl): only 2D MATS supported, got dims ~S" dims))
-    (let* ((rows (first dims))
+;;; ------------------------------------------------------------
+;;; GELU
+;;; ------------------------------------------------------------
+
+(defmethod cl-transformer-blocks:tb-gelu ((x mgl-mat:mat))
+  "Approximate GELU using tanh-based formula."
+  (let* ((c0 0.5d0)
+         (c1 (* (sqrt 2d0 (/ 1d0 pi)) 0.5d0))) ; 0.5 * sqrt(2/pi)
+    (mgl-mat:with-cuda* ()
+      (let ((x3 (mgl-mat:* x (mgl-mat:* x x))) ; x^3
+            (inner nil)
+            (tanh-inner nil)
+            (one (mgl-mat:ones-like x)))
+        (setf inner (mgl-mat:+ x (mgl-mat:* 0.044715d0 x3)))
+        (setf tanh-inner (mgl-mat:tanh (mgl-mat:* c1 inner)))
+        ;; 0.5 * x * (1 + tanh(...))
+        (mgl-mat:* c0 x (mgl-mat:+ one tanh-inner))))))
+        
+;;; ------------------------------------------------------------
+;;; Layer norm
+;;; ------------------------------------------------------------
+
+(defmethod cl-transformer-blocks:tb-layer-norm
+    ((x mgl-mat:mat) gamma beta &key (epsilon 1.0d-5))
+  "Simple layer norm over features for each column.
+
+GAMMA/BETA can be NIL, in which case we use scale=1 and shift=0."
+  (declare (ignore gamma beta))
+  (mgl-mat:with-cuda* ()
+    (let* ((dims (mgl-mat:dimensions x))
+           (rows (first dims))
            (cols (second dims))
-           ;; sanity check gamma/beta if provided
-           (gamma* (when gamma
-                     (let ((gdims (mat-dimensions gamma)))
-                       (unless (and (= (length gdims) 2)
-                                    (= (first gdims) 1)
-                                    (= (second gdims) cols))
-                         (error "tb-layer-norm (mgl): GAMMA must be (1 x ~D), got ~S"
-                                cols gdims))
-                       gamma)))
-           (beta*  (when beta
-                     (let ((bdims (mat-dimensions beta)))
-                       (unless (and (= (length bdims) 2)
-                                    (= (first bdims) 1)
-                                    (= (second bdims) cols))
-                         (error "tb-layer-norm (mgl): BETA must be (1 x ~D), got ~S"
-                                cols bdims))
-                       beta)))
-           (out (copy-mat x)))
-      (dotimes (i rows)
-        (%layer-norm-row! x out i gamma* beta* eps))
-      out)))
+           ;; mean & variance per column
+           (mean (mgl-mat:zeros rows 1))
+           (var  (mgl-mat:zeros rows 1))
+           (ones (mgl-mat:ones 1 cols))
+           (normed (mgl-mat:zeros rows cols)))
+      ;; mean across columns: mean = (1/C) * X * 1
+      (setf mean (mgl-mat:matmul x ones))
+      (setf mean (mgl-mat:* (/ 1.0d0 cols) mean))
 
+      ;; variance: mean of squared deviation
+      (let* ((mean-broadcast (mgl-mat:matmul mean (mgl-mat:ones 1 cols)))
+             (centered (mgl-mat:- x mean-broadcast))
+             (sq (mgl-mat:* centered centered)))
+        (setf var (mgl-mat:matmul sq ones))
+        (setf var (mgl-mat:* (/ 1.0d0 cols) var))
+        ;; stddev
+        (let* ((var-bc (mgl-mat:matmul var (mgl-mat:ones 1 cols)))
+               (denom (mgl-mat:sqrt (mgl-mat:+ var-bc epsilon)))
+               (y (mgl-mat:/ centered denom)))
+          (setf normed y)))
+      normed)))
 
-;;; --------------------
-;;; protocol: dropout
-;;; --------------------
+;;; ------------------------------------------------------------
+;;; Dropout
+;;; ------------------------------------------------------------
 
-;;; Only uses mat-dimensions, mref, copy-mat, mgl-zeros, uniform-random!
-
-
-(defmethod tb-dropout ((x mat) p &key training-p)
-  "Dropout for MGL-MAT backend.
-
-P is the drop probability in [0,1). When TRAINING-P is true, units are
-zeroed with probability P and the remaining ones are scaled by 1/(1-P).
-When TRAINING-P is NIL, returns a copy of X (no dropout applied)."
+(defmethod cl-transformer-blocks:tb-dropout
+    ((x mgl-mat:mat) p &key training-p)
+  "Naive dropout implementation for MGL-MAT backend."
   (cond
-    ;; no dropout when not training or p <= 0
+    ;; no dropout
     ((or (not training-p)
          (<= p 0.0d0))
-     (copy-mat x))
-
-    ;; extreme corner: p >= 1.0 -> all zeros
+     (mgl-mat:copy! x))
+    ;; extreme: everything dropped -> zeros
     ((>= p 1.0d0)
-     (tb:tb-zeros :mgl (mat-dimensions x)))
-
+     (apply #'mgl-mat:zeros (mgl-mat:dimensions x)))
     (t
-     (let* ((dims (mat-dimensions x))
+     (let* ((dims (mgl-mat:dimensions x))
             (rows (first dims))
             (cols (second dims))
-            (y    (copy-mat x))
-            (mask (tb:tb-zeros :mgl dims)))
+            (y    (mgl-mat:copy! x))
+            (mask (apply #'mgl-mat:zeros dims)))
        ;; fill mask with uniform [0,1)
-       (uniform-random! mask :limit 1.0d0)
-       ;; threshold + scale
+       (mgl-mat:uniform-random! mask :limit 1.0d0)
        (let ((scale (/ 1.0d0 (- 1.0d0 p))))
          (dotimes (i rows)
            (dotimes (j cols)
-             (let ((r (mref mask i j)))
-               (setf (mref mask i j)
+             (let ((r (mgl-mat:mref mask i j)))
+               (setf (mgl-mat:mref mask i j)
                      (if (< r p)
                          0.0d0
                          scale))))))
-       ;; apply mask: y := y * mask elementwise
+       ;; apply mask elementwise
        (dotimes (i rows)
          (dotimes (j cols)
-           (setf (mref y i j)
-                 (* (mref y i j) (mref mask i j)))))
+           (setf (mgl-mat:mref y i j)
+                 (* (mgl-mat:mref y i j)
+                    (mgl-mat:mref mask i j)))))
        y))))

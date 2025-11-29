@@ -1,42 +1,46 @@
 (in-package #:cl-transformer-blocks)
 
 (defclass attention-layer ()
-  ((w-q :initarg :w-q :reader attention-w-q)
-   (w-k :initarg :w-k :reader attention-w-k)
-   (w-v :initarg :w-v :reader attention-w-v)
-   (w-o :initarg :w-o :reader attention-w-o)
+  ((w-q :initarg :w-q :accessor attention-w-q)
+   (w-k :initarg :w-k :accessor attention-w-k)
+   (w-v :initarg :w-v :accessor attention-w-v)
+   (w-o :initarg :w-o :accessor attention-w-o)
    (model-dim :initarg :model-dim :reader attention-model-dim))
-  (:documentation
-   "Single-head self-attention layer.
-
-Assumes inputs X have shape (D x T), where D = MODEL-DIM."))
+  (:documentation "Single-head self-attention layer."))
 
 (defmethod forward ((layer attention-layer) x &key mask training-p)
   (declare (ignore mask training-p))
-  (let* ((d (attention-model-dim layer))
+  (let* ((d   (attention-model-dim layer))
          (w-q (attention-w-q layer))
          (w-k (attention-w-k layer))
          (w-v (attention-w-v layer))
          (w-o (attention-w-o layer))
 
-         ;; Projections: (D x D) * (D x T) -> (D x T)
          (q (tb-matmul w-q x))
          (k (tb-matmul w-k x))
          (v (tb-matmul w-v x))
 
-         ;; Scores: (T x D) * (D x T) -> (T x T)
-         (k-t (tb-transpose k))
+         (k-t    (tb-transpose k))
          (scores (tb-matmul k-t q))
-
-         ;; Scale by 1/sqrt(D)
-         (scaled (tb-scale scores (/ 1.0d0 (sqrt (coerce d 'double-float)))))
-
-         ;; Softmax over last axis (backend decides exact axis semantics)
+         (scaled (tb-scale scores
+                           (/ 1.0d0 (sqrt (coerce d 'double-float)))))
          (weights (tb-softmax scaled :axis -1))
-
-         ;; Attention output: (D x T) = (D x T) * (T x T)
-         (attn (tb-matmul v weights))
-
-         ;; Output projection: (D x D) * (D x T) -> (D x T)
-         (out (tb-matmul w-o attn)))
+         (attn    (tb-matmul v weights))
+         (out     (tb-matmul w-o attn)))
     out))
+
+(defclass feedforward-layer ()
+  ((w1 :initarg :w1 :accessor ffn-w1)
+   (w2 :initarg :w2 :accessor ffn-w2)
+   (model-dim  :initarg :model-dim  :reader ffn-model-dim)
+   (hidden-dim :initarg :hidden-dim :reader ffn-hidden-dim))
+  (:documentation "Position-wise feedforward network."))
+
+(defmethod forward ((layer feedforward-layer) x &key mask training-p)
+  (declare (ignore mask))
+  (let* ((w1 (ffn-w1 layer))
+         (w2 (ffn-w2 layer))
+         (hidden    (tb-matmul w1 x))
+         (activated (tb-gelu hidden))
+         (out       (tb-matmul w2 activated)))
+    (tb-dropout out 0.0d0 :training-p training-p)))
