@@ -14,95 +14,172 @@
 
 (defmethod cl-transformer-blocks:tb-zeros ((backend (eql :mgl)) dims &key (dtype :float))
   "Create an MGL-MAT:MAT of zeros with shape DIMS."
-  (declare (ignore dtype))
-  (apply #'mgl-mat:zeros dims))
+  (declare (ignore backend dtype))
+  (mgl-mat:make-mat dims :ctype dtype :initial-element 0.0d0))
 
 (defmethod cl-transformer-blocks:tb-tensor-shape ((x mgl-mat:mat))
   "Return dimensions of an MGL-MAT:MAT as a list."
-  (mgl-mat:dimensions x))
+  (mgl-mat:mat-dimensions x))
 
 ;;; ------------------------------------------------------------
 ;;; Basic ops
 ;;; ------------------------------------------------------------
 
-(defmethod cl-transformer-blocks:tb-matmul ((a mgl-mat:mat) (b mgl-mat:mat))
-  (mgl-mat:matmul a b))
+(defmethod tb-tensor-shape ((x mat))
+  "Return the shape of X as a list of integers, e.g. (ROWS COLS)."
+  (mat-dimensions x))
 
-(defmethod cl-transformer-blocks:tb-add ((a mgl-mat:mat) (b mgl-mat:mat))
-  (mgl-mat:+ a b))
+(defmethod tb-matmul ((a mat) (b mat))
+  "Matrix multiplication A * B via MGL-MAT (BLAS / cuBLAS underneath)."
+  (mm* a b))
 
-(defmethod cl-transformer-blocks:tb-add-scaled ((a mgl-mat:mat) (b mgl-mat:mat) scale)
-  ;; a + scale * b
-  (mgl-mat:+ a (mgl-mat:* scale b)))
+(defmethod tb-add ((a mat) (b mat))
+  "Element-wise addition. Return a new MAT representing A + B."
+  (let ((y (copy-mat a)))
+    ;; y := 1 * b + y  => y = a + b
+    (axpy! 1.0d0 b y)
+    y))
 
-(defmethod cl-transformer-blocks:tb-scale ((x mgl-mat:mat) alpha)
-  (mgl-mat:* alpha x))
+(defmethod tb-add-scaled ((a mat) (b mat) scale)
+  "Return A + SCALE * B as a new MAT."
+  (let ((y (copy-mat a)))
+    ;; y := scale * b + y  => y = a + scale * b
+    (axpy! scale b y)
+    y))
 
-(defmethod cl-transformer-blocks:tb-transpose ((x mgl-mat:mat))
-  (mgl-mat:transpose x))
+(defmethod tb-scale ((x mat) alpha)
+  "Return ALPHA * X as a new MAT."
+  (let ((y (copy-mat x)))
+    (scal! alpha y)
+    y))
+
+(defmethod tb-transpose ((x mat))
+  "Return the transpose of X as a new MAT."
+  (transpose x))
 
 ;;; ------------------------------------------------------------
 ;;; Softmax
 ;;; ------------------------------------------------------------
+;;; Very simple 2D softmax implementation over the last axis (rows-by-row).
+;;; We ignore AXIS for now and always normalize across columns, which matches
+;;; the (D x T) / (T x T) usage where softmax is over the 'time' dimension.
 
-(defmethod cl-transformer-blocks:tb-softmax ((x mgl-mat:mat) &key axis)
+(defmethod tb-softmax ((x mat) &key axis)
+  "Softmax of X along the last dimension.
+
+Currently AXIS is ignored; we always normalize each row independently."
   (declare (ignore axis))
-  ;; We rely on MGL's softmax; for now treat as "softmax over last axis".
-  (mgl-mat:softmax x))
+  (destructuring-bind (rows cols) (mat-dimensions x)
+    (let ((y (copy-mat x)))
+      (dotimes (i rows)
+        ;; numerical stability: subtract row max
+        (let ((row-max (mref y i 0)))
+          (dotimes (j cols)
+            (let ((v (mref y i j)))
+              (when (> v row-max)
+                (setf row-max v)))
+            )
+          ;; exponentiate shifted values and accumulate sum
+          (let ((sum 0.0d0))
+            (dotimes (j cols)
+              (let* ((v  (- (mref y i j) row-max))
+                     (ev (exp v)))
+                (setf (mref y i j) ev)
+                (incf sum ev))
+              )
+            ;; normalize
+            (dotimes (j cols)
+              (setf (mref y i j)
+                    (/ (mref y i j) sum)))))
+        )
+      y)))
+
 
 ;;; ------------------------------------------------------------
-;;; GELU
+;;; GELU activation (approximate)
 ;;; ------------------------------------------------------------
+;;; We use the common tanh-based approximation:
+;;;   gelu(x) ≈ 0.5 * x * (1 + tanh(√(2/π) * (x + 0.044715 * x^3)))
 
-(defmethod cl-transformer-blocks:tb-gelu ((x mgl-mat:mat))
-  "Approximate GELU using tanh-based formula."
-  (let* ((c0 0.5d0)
-         (c1 (* (sqrt 2d0 (/ 1d0 pi)) 0.5d0))) ; 0.5 * sqrt(2/pi)
-    (mgl-mat:with-cuda* ()
-      (let ((x3 (mgl-mat:* x (mgl-mat:* x x))) ; x^3
-            (inner nil)
-            (tanh-inner nil)
-            (one (mgl-mat:ones-like x)))
-        (setf inner (mgl-mat:+ x (mgl-mat:* 0.044715d0 x3)))
-        (setf tanh-inner (mgl-mat:tanh (mgl-mat:* c1 inner)))
-        ;; 0.5 * x * (1 + tanh(...))
-        (mgl-mat:* c0 x (mgl-mat:+ one tanh-inner))))))
+(defmethod tb-gelu ((x mat))
+  "Apply GELU activation element-wise using the tanh approximation."
+  (destructuring-bind (rows cols) (mat-dimensions x)
+    (let* ((y (copy-mat x))
+           (sqrt-2/pi (sqrt (/ 2.0d0 pi))))
+      (dotimes (i rows)
+        (dotimes (j cols)
+          (let* ((v   (mref y i j))
+                 (v3  (* v v v))
+                 (inner (+ v (* 0.044715d0 v3)))
+                 (targ (* sqrt-2/pi inner))
+                 (phi  (tanh targ))
+                 (gelu (* 0.5d0 v (+ 1.0d0 phi))))
+            (setf (mref y i j) gelu))))
+      y)))
         
 ;;; ------------------------------------------------------------
 ;;; Layer norm
 ;;; ------------------------------------------------------------
 
+;;; layer norm implementation – keep your logic, just replace ZEROS/ONES
 (defmethod cl-transformer-blocks:tb-layer-norm
-    ((x mgl-mat:mat) gamma beta &key (epsilon 1.0d-5))
-  "Simple layer norm over features for each column.
+    ((x mgl-mat:mat) gamma beta &key (epsilon 1d-5))
+  (let* ((dims (mgl-mat:mat-dimensions x))
+         (rows (first dims))
+         (cols (second dims))
+         (ctype (mgl-mat:ctype x))
+         ;; row-wise mean/var -> 1 x cols
+         (mean (mgl-mat:make-mat (list 1 cols)
+                                 :ctype ctype
+                                 :initial-element 0.0d0))
+         (var  (mgl-mat:make-mat (list 1 cols)
+                                 :ctype ctype
+                                 :initial-element 0.0d0)))
+    ;; accumulate mean and variance
+    (dotimes (j cols)
+      (let ((sum 0d0) (sqsum 0d0))
+        (dotimes (i rows)
+          (let ((v (coerce (mgl-mat:mref x i j) 'double-float)))
+            (incf sum v)
+            (incf sqsum (* v v))))
+        (let* ((m (/ sum rows))
+               (v (- (/ sqsum rows) (* m m))))
+          (setf (mgl-mat:mref mean 0 j) m)
+          (setf (mgl-mat:mref var  0 j) v)))
+      )
 
-GAMMA/BETA can be NIL, in which case we use scale=1 and shift=0."
-  (declare (ignore gamma beta))
-  (mgl-mat:with-cuda* ()
-    (let* ((dims (mgl-mat:dimensions x))
-           (rows (first dims))
-           (cols (second dims))
-           ;; mean & variance per column
-           (mean (mgl-mat:zeros rows 1))
-           (var  (mgl-mat:zeros rows 1))
-           (ones (mgl-mat:ones 1 cols))
-           (normed (mgl-mat:zeros rows cols)))
-      ;; mean across columns: mean = (1/C) * X * 1
-      (setf mean (mgl-mat:matmul x ones))
-      (setf mean (mgl-mat:* (/ 1.0d0 cols) mean))
+    ;; default gamma / beta if nil
+    (let* ((gamma (or gamma
+                      (let ((g (mgl-mat:make-mat (list 1 cols) :ctype ctype)))
+                        (mgl-mat:fill! g 1.0d0)
+                        g)))
+           (beta  (or beta
+                      (mgl-mat:make-mat (list 1 cols)
+                                        :ctype ctype
+                                        :initial-element 0.0d0))))
+      ;; y = (x - mean) / sqrt(var + eps)
+      (let* ((y (mgl-mat:copy-mat x)))
+        (dotimes (i rows)
+          (dotimes (j cols)
+            (let* ((m  (coerce (mgl-mat:mref mean 0 j) 'double-float))
+                   (v  (max 0d0 (coerce (mgl-mat:mref var  0 j) 'double-float)))
+                   (den (sqrt (+ v epsilon)))
+                   (xij (coerce (mgl-mat:mref x i j) 'double-float))
+                   (norm (/ (- xij m) den)))
+              (setf (mgl-mat:mref y i j) norm))))
+        ;; affine transform: y * gamma + beta (broadcast along rows)
+        (dotimes (i rows)
+          (dotimes (j cols)
+            (let* ((g (coerce (mgl-mat:mref gamma 0 j) 'double-float))
+                   (b (coerce (mgl-mat:mref beta  0 j) 'double-float))
+                   (v (coerce (mgl-mat:mref y i j) 'double-float)))
+              (setf (mgl-mat:mref y i j) (+ (* v g) b)))))
+        y))))
 
-      ;; variance: mean of squared deviation
-      (let* ((mean-broadcast (mgl-mat:matmul mean (mgl-mat:ones 1 cols)))
-             (centered (mgl-mat:- x mean-broadcast))
-             (sq (mgl-mat:* centered centered)))
-        (setf var (mgl-mat:matmul sq ones))
-        (setf var (mgl-mat:* (/ 1.0d0 cols) var))
-        ;; stddev
-        (let* ((var-bc (mgl-mat:matmul var (mgl-mat:ones 1 cols)))
-               (denom (mgl-mat:sqrt (mgl-mat:+ var-bc epsilon)))
-               (y (mgl-mat:/ centered denom)))
-          (setf normed y)))
-      normed)))
+
+;; Adjust to your style – the key part is: use make-mat + fill!, not mgl-mat:zeros / mgl-mat:ones, 
+;; and keep &key (epsilon ...) so it matches the generic.)
+
 
 ;;; ------------------------------------------------------------
 ;;; Dropout
@@ -118,9 +195,9 @@ GAMMA/BETA can be NIL, in which case we use scale=1 and shift=0."
      (mgl-mat:copy! x))
     ;; extreme: everything dropped -> zeros
     ((>= p 1.0d0)
-     (apply #'mgl-mat:zeros (mgl-mat:dimensions x)))
+     (apply #'mgl-mat:zeros (mgl-mat:mat-dimensions x)))
     (t
-     (let* ((dims (mgl-mat:dimensions x))
+     (let* ((dims (mgl-mat:mat-dimensions x))
             (rows (first dims))
             (cols (second dims))
             (y    (mgl-mat:copy! x))
