@@ -75,7 +75,7 @@
             ;; mean close to 0
             (is (< (abs mean) 1d-6))
             ;; variance close to 1
-            (is (< (abs (- var 1d0)) 1d-3)))))))
+            (is (< (abs (- var 1d0)) 1d-3))))))))
 
 ;;; ------------------------------------------------------------
 ;;; dropout
@@ -99,6 +99,6 @@
         (dotimes (i r)
           (dotimes (j c)
             (incf diff-sum
-                  (abs (- (mref y-test i j)
-                          (mref x i j)))))))
+                  (abs (- (mgl-mat:mref y-test i j)
+                          (mgl-mat:mref x i j)))))))
       (is (< diff-sum 1d-8)))))  ; tiny numerical noise is ok

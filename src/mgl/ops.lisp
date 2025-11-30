@@ -14,16 +14,25 @@
 
 (defmethod cl-transformer-blocks:tb-zeros ((backend (eql :mgl)) dims &key (dtype :float))
   "Create an MGL-MAT:MAT of zeros with shape DIMS."
-  (declare (ignore backend dtype))
+  (declare (ignore backend))
   (mgl-mat:make-mat dims :ctype dtype :initial-element 0.0d0))
+
+
+(defun random-mat (rows cols &key (stddev 0.02d0))
+  "Create a ROWS x COLS MGL-MAT:MAT with small Gaussian random values."
+  (let ((m (tb-zeros :mgl (list rows cols))))
+    (mgl-mat:gaussian-random! m :mean 0.0d0 :stddev stddev)
+    m))
+
+;;; ------------------------------------------------------------
+;;; Basic ops
+;;; ------------------------------------------------------------
+
 
 (defmethod cl-transformer-blocks:tb-tensor-shape ((x mgl-mat:mat))
   "Return dimensions of an MGL-MAT:MAT as a list."
   (mgl-mat:mat-dimensions x))
 
-;;; ------------------------------------------------------------
-;;; Basic ops
-;;; ------------------------------------------------------------
 
 (defmethod tb-tensor-shape ((x mat))
   "Return the shape of X as a list of integers, e.g. (ROWS COLS)."
@@ -127,7 +136,7 @@ Currently AXIS is ignored; we always normalize each row independently."
   (let* ((dims (mgl-mat:mat-dimensions x))
          (rows (first dims))
          (cols (second dims))
-         (ctype (mgl-mat:ctype x))
+         (ctype (slot-value x 'mgl-mat::mat-ctype))
          ;; row-wise mean/var -> 1 x cols
          (mean (mgl-mat:make-mat (list 1 cols)
                                  :ctype ctype
@@ -150,12 +159,12 @@ Currently AXIS is ignored; we always normalize each row independently."
 
     ;; default gamma / beta if nil
     (let* ((gamma (or gamma
-                      (let ((g (mgl-mat:make-mat (list 1 cols) :ctype ctype)))
+                      (let ((g (mgl-mat:make-mat (list 1 cols) :ctype mgl-mat::mat-ctype)))
                         (mgl-mat:fill! g 1.0d0)
                         g)))
            (beta  (or beta
                       (mgl-mat:make-mat (list 1 cols)
-                                        :ctype ctype
+                                        :ctype mgl-mat::mat-ctype
                                         :initial-element 0.0d0))))
       ;; y = (x - mean) / sqrt(var + eps)
       (let* ((y (mgl-mat:copy-mat x)))
@@ -192,16 +201,20 @@ Currently AXIS is ignored; we always normalize each row independently."
     ;; no dropout
     ((or (not training-p)
          (<= p 0.0d0))
-     (mgl-mat:copy! x))
+     (mgl-mat:copy-mat x))
+
     ;; extreme: everything dropped -> zeros
     ((>= p 1.0d0)
-     (apply #'tb-zeros (mgl-mat:mat-dimensions x)))
+     (apply #'cl-transformer-blocks:tb-zeros (mgl-mat:mat-dimensions x)))
+
     (t
      (let* ((dims (mgl-mat:mat-dimensions x))
             (rows (first dims))
             (cols (second dims))
-            (y    (mgl-mat:copy! x))
-            (mask (apply #'tb-zeros dims)))
+            ;; copy of x
+            (y    (mgl-mat:copy-mat x))
+            ;; mask with same shape, zeros
+            (mask (apply #'cl-transformer-blocks:tb-zeros dims)))
        ;; fill mask with uniform [0,1)
        (mgl-mat:uniform-random! mask :limit 1.0d0)
        (let ((scale (/ 1.0d0 (- 1.0d0 p))))
