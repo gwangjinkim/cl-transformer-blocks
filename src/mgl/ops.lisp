@@ -133,20 +133,22 @@ Currently AXIS is ignored; we always normalize each row independently."
 ;;; layer norm implementation – keep your logic, just replace ZEROS/ONES
 (defmethod cl-transformer-blocks:tb-layer-norm
     ((x mgl-mat:mat) gamma beta &key (epsilon 1d-5))
-  (let* ((dims (mgl-mat:mat-dimensions x))
-         (rows (first dims))
-         (cols (second dims))
-         (ctype (slot-value x 'mgl-mat::mat-ctype))
+  (let* ((dims  (mgl-mat:mat-dimensions x))
+         (rows  (first dims))
+         (cols  (second dims))
+         ;; INTERNAL: per-mat ctype, e.g. :float or :double, CPU or CUDA
+         (ctype (slot-value x 'mgl-mat::ctype))
          ;; row-wise mean/var -> 1 x cols
-         (mean (mgl-mat:make-mat (list 1 cols)
-                                 :ctype ctype
-                                 :initial-element 0.0d0))
-         (var  (mgl-mat:make-mat (list 1 cols)
-                                 :ctype ctype
-                                 :initial-element 0.0d0)))
-    ;; accumulate mean and variance
+         (mean  (mgl-mat:make-mat (list 1 cols)
+                                  :ctype ctype
+                                  :initial-element 0.0d0))
+         (var   (mgl-mat:make-mat (list 1 cols)
+                                  :ctype ctype
+                                  :initial-element 0.0d0)))
+    ;; accumulate mean and variance for each column
     (dotimes (j cols)
-      (let ((sum 0d0) (sqsum 0d0))
+      (let ((sum 0d0)
+            (sqsum 0d0))
         (dotimes (i rows)
           (let ((v (coerce (mgl-mat:mref x i j) 'double-float)))
             (incf sum v)
@@ -155,27 +157,31 @@ Currently AXIS is ignored; we always normalize each row independently."
                (v (- (/ sqsum rows) (* m m))))
           (setf (mgl-mat:mref mean 0 j) m)
           (setf (mgl-mat:mref var  0 j) v)))
+
+      ;; end dotimes j
       )
 
-    ;; default gamma / beta if nil
+    ;; default gamma / beta if NIL – keep same ctype as X
     (let* ((gamma (or gamma
-                      (let ((g (mgl-mat:make-mat (list 1 cols) :ctype mgl-mat::mat-ctype)))
-                        (mgl-mat:fill! g 1.0d0)
+                      (let ((g (mgl-mat:make-mat (list 1 cols)
+                                                 :ctype ctype
+                                                 :initial-element 1.0d0)))
                         g)))
            (beta  (or beta
                       (mgl-mat:make-mat (list 1 cols)
-                                        :ctype mgl-mat::mat-ctype
+                                        :ctype ctype
                                         :initial-element 0.0d0))))
       ;; y = (x - mean) / sqrt(var + eps)
-      (let* ((y (mgl-mat:copy-mat x)))
+      (let ((y (mgl-mat:copy-mat x)))
         (dotimes (i rows)
           (dotimes (j cols)
-            (let* ((m  (coerce (mgl-mat:mref mean 0 j) 'double-float))
-                   (v  (max 0d0 (coerce (mgl-mat:mref var  0 j) 'double-float)))
-                   (den (sqrt (+ v epsilon)))
-                   (xij (coerce (mgl-mat:mref x i j) 'double-float))
+            (let* ((m    (coerce (mgl-mat:mref mean 0 j) 'double-float))
+                   (v    (max 0d0 (coerce (mgl-mat:mref var  0 j) 'double-float)))
+                   (den  (sqrt (+ v epsilon)))
+                   (xij  (coerce (mgl-mat:mref x i j) 'double-float))
                    (norm (/ (- xij m) den)))
               (setf (mgl-mat:mref y i j) norm))))
+
         ;; affine transform: y * gamma + beta (broadcast along rows)
         (dotimes (i rows)
           (dotimes (j cols)
@@ -184,7 +190,6 @@ Currently AXIS is ignored; we always normalize each row independently."
                    (v (coerce (mgl-mat:mref y i j) 'double-float)))
               (setf (mgl-mat:mref y i j) (+ (* v g) b)))))
         y))))
-
 
 ;; Adjust to your style – the key part is: use make-mat + fill!, not mgl-mat:zeros / mgl-mat:ones, 
 ;; and keep &key (epsilon ...) so it matches the generic.)

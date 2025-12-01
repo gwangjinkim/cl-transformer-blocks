@@ -1,21 +1,24 @@
-(in-package #:cl-transformer-blocks-mgl)
+in-package #:cl-transformer-blocks-mgl)
 
-(defparameter *device* :cpu
-  "Either :cpu or :gpu.
+(defun setup-default-backend (&key (ctype :float) (cuda t))
+  "Configure global MGL-MAT defaults for cl-transformer-blocks.
 
-On Mac (no CUDA) use :cpu. On a CUDA/NVIDIA machine, :gpu can be used
-inside WITH-GPU to run operations on the GPU (assuming MGL-MAT CUDA is configured).")
+- CTYPE: :float, :double, etc.
+- CUDA:  T enables CUDA support (if available), NIL disables it."
+  (setf mgl-mat:*default-mat-ctype* ctype
+        mgl-mat:*cuda-enabled*      (and cuda t)))
 
 (defmacro with-cpu (() &body body)
-  "Evaluate BODY with *DEVICE* bound to :CPU."
-  `(let ((*device* :cpu))
+  "Run BODY on CPU: disable CUDA and use the current default CTYPE."
+  `(let ((*device* :cpu)
+         (mgl-mat:*cuda-enabled* nil))
      ,@body))
 
 (defmacro with-gpu (() &body body)
-  "Evaluate BODY with MGL-MAT CUDA context and *DEVICE* bound to :GPU.
+  "Run BODY on GPU: enable CUDA and enter CUDA context.
 
-Requires CUDA + NVIDIA GPU. On systems without CUDA, this will signal
-an error when MGL-MAT tries to enter the CUDA context."
-  `(mgl-mat:with-cuda* ()
-     (let ((*device* :gpu))
+Requires CUDA + NVIDIA GPU and a properly configured MGL-MAT CUDA."
+  `(let ((*device* :gpu)
+         (mgl-mat:*cuda-enabled* t))
+     (mgl-mat:with-cuda* ()
        ,@body)))
