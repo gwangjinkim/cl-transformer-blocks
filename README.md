@@ -67,12 +67,12 @@ Minimal example: single Transformer block on CPU with random data.
   (let* (;; create a random matrix of shape (D_MODEL x SEQ_LEN)
          (x     (tb-mgl:random-mat *d-model* *seq-len*))
          ;; construct one Transformer block on the MGL backend
-         (block (tb-mgl:make-block *d-model*
+         (tblock (tb-mgl:make-block *d-model*
                                    :n-heads         2
                                    :ffn-hidden-dim  16
                                    :dropout         0.1d0))
          ;; forward pass (no mask, training mode off => dropout disabled)
-         (y     (tb:forward block x :training-p nil)))
+         (y     (tb:forward tblock x :training-p nil)))
     (format t "~&Input  shape: ~S~%" (mgl-mat:mat-dimensions x))
     (format t "Output shape: ~S~%" (mgl-mat:mat-dimensions y))))
 ```
@@ -95,8 +95,8 @@ Typical setup in your app:
 ;; Then run your computation inside WITH-GPU:
 (tb-mgl:with-gpu ()
   (let* ((x     (tb-mgl:random-mat *d-model* *seq-len*))
-         (block (tb-mgl:make-block *d-model* :n-heads 2 :ffn-hidden-dim 16 :dropout 0.1d0))
-         (y     (tb:forward block x :training-p t)))
+         (tblock (tb-mgl:make-block *d-model* :n-heads 2 :ffn-hidden-dim 16 :dropout 0.1d0))
+         (y     (tb:forward tblock x :training-p t)))
     (format t "GPU output shape: ~S~%" (mgl-mat:mat-dimensions y))))
 ```
 
@@ -211,8 +211,8 @@ Example: random mat + block, GPU:
 ```lisp
 (tb-mgl:with-gpu ()
   (let* ((x     (tb-mgl:random-mat *d-model* *seq-len*))
-         (block (tb-mgl:make-block *d-model* :n-heads 2 :ffn-hidden-dim 16 :dropout 0.1d0))
-         (y     (tb:forward block x :training-p t)))
+         (tblock (tb-mgl:make-block *d-model* :n-heads 2 :ffn-hidden-dim 16 :dropout 0.1d0))
+         (y     (tb:forward tblock x :training-p t)))
     (format t "CUDA run ok, shape: ~S~%" (mgl-mat:mat-dimensions y)))
 ```
 
