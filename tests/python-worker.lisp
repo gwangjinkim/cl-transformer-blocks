@@ -233,7 +233,10 @@
                       (tb:train-step model optimizer ids :labels labels
                                                         :attention-mask mask
                                                         :max-grad-norm 1.0))))
-                 (tolerance (if (eq device :cpu) 1e-7 3e-5))
+                 ;; Independent Torch processes differed by two FP32 steps on
+                 ;; the hosted x86 runner.  This remains tighter than the
+                 ;; separately checked three-step trained-logit tolerance.
+                 (tolerance (if (eq device :cpu) 1e-6 3e-5))
                  (delta (abs (- actual expected))))
             (check (< delta tolerance)
                    (format nil
