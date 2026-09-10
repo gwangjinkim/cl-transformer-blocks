@@ -218,23 +218,27 @@
                "failed training restores evaluation mode")
         (loop for expected across (gethash "adamw_losses" reference)
               for step from 0 do
-          (let ((actual
-                  (case step
-                    (0 (tb:python-processor-train-step
-                        model optimizer `(("text" . ,texts))
-                        :options '(("padding" . yason:true))
-                        :model-inputs `(("labels" . ,labels)) :max-grad-norm 1.0))
-                    (1 (tb:python-train-step
-                        model optimizer
-                        `(("input_ids" . ,ids) ("attention_mask" . ,mask)
-                          ("labels" . ,labels))
-                        :max-grad-norm 1.0))
-                    (otherwise
-                     (tb:train-step model optimizer ids :labels labels
-                                                       :attention-mask mask
-                                                       :max-grad-norm 1.0)))))
-            (check (< (abs (- actual expected)) (if (eq device :cpu) 1e-7 3e-5))
-                   "Lisp-controlled worker AdamW loss")))
+          (let* ((actual
+                   (case step
+                     (0 (tb:python-processor-train-step
+                         model optimizer `(("text" . ,texts))
+                         :options '(("padding" . yason:true))
+                         :model-inputs `(("labels" . ,labels)) :max-grad-norm 1.0))
+                     (1 (tb:python-train-step
+                         model optimizer
+                         `(("input_ids" . ,ids) ("attention_mask" . ,mask)
+                           ("labels" . ,labels))
+                         :max-grad-norm 1.0))
+                     (otherwise
+                      (tb:train-step model optimizer ids :labels labels
+                                                        :attention-mask mask
+                                                        :max-grad-norm 1.0))))
+                 (tolerance (if (eq device :cpu) 1e-7 3e-5))
+                 (delta (abs (- actual expected))))
+            (check (< delta tolerance)
+                   (format nil
+                           "Lisp-controlled worker AdamW loss at step ~D: actual ~S, expected ~S, delta ~S, tolerance ~S"
+                           step actual expected delta tolerance))))
         (signals tb:shape-error (tb:python-train-microbatches model optimizer nil))
         (signals tb:compatibility-error
           (tb:configure-python-scheduler model optimizer :linear :total-steps 4)))
