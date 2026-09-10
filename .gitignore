@@ -1,0 +1,12 @@
+# Build products, dependencies, and model fixtures
+.build/
+.venv/
+.cache/
+/models/
+*.fasl
+*.dylib
+*.so
+*.o
+__pycache__/
+*.pyc
+.DS_Store

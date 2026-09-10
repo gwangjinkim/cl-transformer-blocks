@@ -1,0 +1,15 @@
+(load "scripts/load.lisp")
+(load "examples/query-teacher/domain.lisp")
+(load "examples/query-teacher/training.lisp")
+(in-package #:tb-query-teacher)
+
+;; Prompt tokens must never become supervised targets, including unequal rows.
+(multiple-value-bind (ids mask labels)
+    (training-batch (list (list #(4 5 6) #(7 8 0)) (list #(9) #(10 0))))
+  (assert (equalp ids #2A((4 5 6 7 8 0) (9 10 0 0 0 0))))
+  (assert (equalp mask #2A((1 1 1 1 1 1) (1 1 1 0 0 0))))
+  (assert (equalp labels #2A((-100 -100 -100 7 8 0) (-100 10 0 -100 -100 -100)))))
+(assert (equal (sort (epoch-order 180 1) #'<) (loop for i below 180 collect i)))
+(assert (equal (epoch-order 180 1) (epoch-order 180 1)))
+(assert (not (equal (epoch-order 180 1) (epoch-order 180 2))))
+(format t "Query training masks and deterministic shuffle passed.~%")

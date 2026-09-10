@@ -1,0 +1,5 @@
+(load (merge-pathnames "load.lisp" *load-truename*))
+(assert (null tb::*native-loaded*))
+(assert (null tb::*tokenizer-loaded*))
+(setf *print-length* 8 *print-level* 5)
+(asdf:test-system "cl-transformer-blocks")

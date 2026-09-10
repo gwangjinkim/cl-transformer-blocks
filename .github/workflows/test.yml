@@ -1,0 +1,84 @@
+name: Native interoperability
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  linux-cpu:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbcl cmake build-essential
+          python3 -m pip install --user uv==0.6.4
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra cpu
+      - name: Build native libraries
+        run: uv run --no-sync python scripts/bootstrap.py
+      - name: Verify tokenizer ABI with overflow checks
+        run: CARGO_TARGET_DIR=.build/tokenizer cargo test --locked --offline --manifest-path native/tokenizer/Cargo.toml
+      - name: Verify Lisp query curriculum and training masks
+        run: |
+          sbcl --noinform --no-sysinit --no-userinit --script tests/query-teacher.lisp
+          sbcl --noinform --no-sysinit --no-userinit --script scripts/test-query-training.lisp
+      - name: Verify CPU inference, gradients, and Python exchange
+        run: uv run --no-sync python scripts/run-tests.py --device cpu
+      - name: Verify PEFT and masked optimizers
+        run: uv run --no-sync python scripts/run-training-tests.py --device cpu
+      - name: Verify GPT-2 architecture
+        run: uv run --no-sync python scripts/run-gpt2-tests.py --device cpu
+      - name: Verify Qwen2 architecture and PEFT exchange
+        run: uv run --no-sync python scripts/run-qwen2-tests.py --device cpu
+      - name: Verify BERT masked-LM architecture
+        run: uv run --no-sync python scripts/run-bert-tests.py --device cpu
+      - name: Verify explicit Python compatibility worker
+        run: uv run --no-sync python scripts/run-python-worker-tests.py --device cpu
+      - name: Verify Lisp-defined portable architecture export
+        run: uv run --no-sync python scripts/run-portable-tests.py --device cpu
+      - name: Verify composable Transformer blocks and PEFT training exchange
+        run: uv run --no-sync python scripts/run-component-lora-tests.py --device cpu
+      - name: Verify pretrained Llama conversion to Lisp components
+        run: uv run --no-sync python scripts/run-composition-import-tests.py --device cpu
+      - name: Verify layer reuse, distillation, FP16/top-k targets, and content-addressed datasets
+        run: uv run --no-sync python scripts/run-distillation-dataset-tests.py --device cpu
+      - name: Smoke-test full-model benchmark contract
+        run: uv run --no-sync python scripts/model-benchmark.py --device cpu --batch 1 --prefill-tokens 16 --decode-tokens 4 --training-tokens 16 --warmups 1 --repeats 2
+  metal:
+    # Explicitly labeled existing Apple silicon runner with Metal device access.
+    # Hosted runner virtualization is not assumed to expose a working GPU.
+    if: github.event_name == 'push' && vars.ENABLE_METAL_RUNNER == 'true'
+    runs-on: [self-hosted, macOS, ARM64, metal]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: uv sync --frozen
+      - run: uv run --no-sync python scripts/bootstrap.py
+      - run: CARGO_TARGET_DIR=.build/tokenizer cargo test --locked --offline --manifest-path native/tokenizer/Cargo.toml
+      - run: uv run --no-sync python scripts/run-tests.py --device cpu
+      - run: uv run --no-sync python scripts/run-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-training-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-gpt2-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-qwen2-tests.py --device cpu
+      - run: uv run --no-sync python scripts/run-qwen2-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-qwen2-tests.py --device cpu --real
+      - run: uv run --no-sync python scripts/run-qwen2-tests.py --device gpu --real
+      - run: uv run --no-sync python scripts/run-bert-tests.py --device cpu
+      - run: uv run --no-sync python scripts/run-bert-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-bert-tests.py --device cpu --real
+      - run: uv run --no-sync python scripts/run-bert-tests.py --device gpu --real
+      - run: uv run --no-sync python scripts/run-python-worker-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-portable-tests.py --device cpu
+      - run: uv run --no-sync python scripts/run-portable-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-component-lora-tests.py --device cpu
+      - run: uv run --no-sync python scripts/run-component-lora-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-composition-import-tests.py --device cpu
+      - run: uv run --no-sync python scripts/run-composition-import-tests.py --device gpu
+      - run: uv run --no-sync python scripts/run-distillation-dataset-tests.py --device cpu
+      - run: uv run --no-sync python scripts/run-distillation-dataset-tests.py --device gpu
+      # The real dataset runner includes conversion, layer reuse, online distillation, FP16/top-k, and hashes.
+      - run: uv run --no-sync python scripts/run-distillation-dataset-tests.py --device cpu --real --local-files-only
+      - run: uv run --no-sync python scripts/run-distillation-dataset-tests.py --device gpu --real --local-files-only
+      - run: uv run --no-sync python scripts/model-benchmark.py --device gpu --batch 1 --prefill-tokens 16 --decode-tokens 4 --training-tokens 16 --warmups 1 --repeats 2

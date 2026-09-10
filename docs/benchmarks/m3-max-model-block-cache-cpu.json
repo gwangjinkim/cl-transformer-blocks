@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-09T14:57:22.853217+00:00",
+  "source": ".build/fixtures/benchmark-llama",
+  "source_revision": null,
+  "fixture_manifest": {
+    "format_version": 1,
+    "seed": 1701,
+    "purpose": "reproducible full-model performance comparison",
+    "parameter_count": 8392960
+  },
+  "artifact_sha256": {
+    "config.json": "da2fb1bc3b3b94f43407f50920cd0c43224887acce08dfb781038a3520ebdbd6",
+    "model.safetensors": "8185b3e255693a5247452c90de19bd865a76104836cc29a9171810ac3a25db67"
+  },
+  "benchmark_source_sha256": {
+    "scripts/model-benchmark.py": "c3ed89fb8be96806ef9ce82d31725da3f490f33f5484f4b6a85d2d6f845cbd3d",
+    "scripts/model-benchmark.lisp": "2f1a66e065656c2c9789178de73c33157d7570ba0979404f3d292acefbf6ba30",
+    "scripts/model-benchmark-fixture.py": "df48df41163581b4656f243ea9a3746c0258a32ceb1c3398839fe7e173d2e0dc",
+    "native/mlx_bridge.c": "5f529f4c39ef54c32da29cc8e85eaecb63e45621a7e0b79bcd005aeb402d7d41",
+    "src/mlx.lisp": "32de6d8ef190cf7a2f7c6d6a20bc35dcc8b72694cce70254c7eab0624916ae2e",
+    "src/llama.lisp": "dfe037253eb057783d8f6d2fc1518b5283ec7cf0c3300d6e730967a881996d96",
+    "src/gpt2.lisp": "20cc28e6dd86f4692edf3a81504dce678dc2fdc4b4432f87a0db18565cdb1897"
+  },
+  "model_type": "llama",
+  "parameter_count": 8392960,
+  "requested_device": "cpu",
+  "dtype": "float32",
+  "settings": {
+    "batch": 1,
+    "prefill_tokens": 128,
+    "decode_tokens": 32,
+    "training_tokens": 64,
+    "warmups": 2,
+    "repeats": 5
+  },
+  "records": [
+    {
+      "workload": "prefill",
+      "frontends": {
+        "native": {
+          "frontend": "common-lisp-mlx",
+          "workload": "prefill",
+          "actual_device": "cpu",
+          "device_api": "mlx-cpu",
+          "dtype": "float32",
+          "samples_seconds": [
+            0.008967,
+            0.008546,
+            0.008455,
+            0.008337,
+            0.008461
+          ],
+          "fingerprint": -2334.92236328125,
+          "allocator_memory": {
+            "active_bytes": 33571840,
+            "cache_bytes": 33803240,
+            "peak_bytes": 67127828
+          },
+          "median_seconds": 0.008461,
+          "batch": 1,
+          "tokens_per_iteration": 128,
+          "tokens_per_second": 15128.235433163929
+        },
+        "python": {
+          "frontend": "python-pytorch",
+          "workload": "prefill",
+          "actual_device": "cpu",
+          "dtype": "float32",
+          "parameter_count": 8392960,
+          "samples_seconds": [
+            0.010325999930500984,
+            0.010792083106935024,
+            0.009529500268399715,
+            0.010525166988372803,
+            0.010941833257675171
+          ],
+          "fingerprint": -2334.87890625,
+          "allocator_memory": {
+            "process_peak_rss_bytes": 414449664
+          },
+          "median_seconds": 0.010525166988372803,
+          "batch": 1,
+          "tokens_per_iteration": 128,
+          "tokens_per_second": 12161.327239881528
+        }
+      },
+      "native_over_python": 0.8038827326299813
+    },
+    {
+      "workload": "decode",
+      "frontends": {
+        "python": {
+          "frontend": "python-pytorch",
+          "workload": "decode",
+          "actual_device": "cpu",
+          "dtype": "float32",
+          "parameter_count": 8392960,
+          "samples_seconds": [
+            0.0032029986614361405,
+            0.003209249989595264,
+            0.003172075521433726,
+            0.0031735924421809614,
+            0.0033411757613066584
+          ],
+          "fingerprint": -11.018875122070312,
+          "allocator_memory": {
+            "process_peak_rss_bytes": 423690240
+          },
+          "median_seconds": 0.0032029986614361405,
+          "batch": 1,
+          "tokens_per_iteration": 1,
+          "tokens_per_second": 312.20743612537956
+        },
+        "native": {
+          "frontend": "common-lisp-mlx",
+          "workload": "decode",
+          "actual_device": "cpu",
+          "device_api": "mlx-cpu",
+          "dtype": "float32",
+          "samples_seconds": [
+            0.00296484375,
+            0.00296109375,
+            0.00299728125,
+            0.002969625,
+            0.00304884375
+          ],
+          "fingerprint": -11.018844604492188,
+          "allocator_memory": {
+            "active_bytes": 33571840,
+            "cache_bytes": 38082860,
+            "peak_bytes": 71125528
+          },
+          "median_seconds": 0.002969625,
+          "batch": 1,
+          "tokens_per_iteration": 1,
+          "tokens_per_second": 336.74285473755106
+        }
+      },
+      "native_over_python": 0.9271390075038303
+    },
+    {
+      "workload": "training",
+      "frontends": {
+        "native": {
+          "frontend": "common-lisp-mlx",
+          "workload": "training",
+          "actual_device": "cpu",
+          "device_api": "mlx-cpu",
+          "dtype": "float32",
+          "samples_seconds": [
+            0.03241,
+            0.031584,
+            0.031479,
+            0.031032,
+            0.029303
+          ],
+          "fingerprint": 9.150123596191406,
+          "allocator_memory": {
+            "active_bytes": 33571840,
+            "cache_bytes": 69554577,
+            "peak_bytes": 80878468
+          },
+          "median_seconds": 0.031479,
+          "batch": 1,
+          "tokens_per_iteration": 63,
+          "tokens_per_second": 2001.33422281521
+        },
+        "python": {
+          "frontend": "python-pytorch",
+          "workload": "training",
+          "actual_device": "cpu",
+          "dtype": "float32",
+          "parameter_count": 8392960,
+          "samples_seconds": [
+            0.024185250513255596,
+            0.02428358420729637,
+            0.023300291039049625,
+            0.022589917294681072,
+            0.021883457899093628
+          ],
+          "fingerprint": 9.150123596191406,
+          "allocator_memory": {
+            "process_peak_rss_bytes": 551862272
+          },
+          "median_seconds": 0.023300291039049625,
+          "batch": 1,
+          "tokens_per_iteration": 63,
+          "tokens_per_second": 2703.82888756267
+        }
+      },
+      "native_over_python": 1.3510131674854808
+    }
+  ],
+  "environment": {
+    "platform": "macOS-15.5-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "Apple M3 Max",
+    "python": "3.12.2 | packaged by Anaconda, Inc. | (main, Feb 27 2024, 12:57:28) [Clang 14.0.6 ]",
+    "sbcl": "SBCL 2.6.7",
+    "packages": {
+      "mlx": "0.32.2",
+      "torch": "2.14.0",
+      "transformers": "5.16.1",
+      "safetensors": "0.8.0"
+    }
+  },
+  "revision": "1a7f2dbea11110ce7e0b59095c79ac58b2bebd17",
+  "tree_dirty": true
+}

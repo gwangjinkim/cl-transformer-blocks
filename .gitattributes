@@ -1,0 +1,8 @@
+* text=auto
+*.lisp text eol=lf
+*.asd text eol=lf
+*.py text eol=lf
+*.c text eol=lf
+*.rs text eol=lf
+*.md text eol=lf
+*.yml text eol=lf

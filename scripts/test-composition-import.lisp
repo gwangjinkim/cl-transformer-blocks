@@ -1,0 +1,6 @@
+(load "scripts/load.lisp")
+(asdf:load-system "cl-transformer-blocks/tests")
+(load "tests/composition-import.lisp")
+(if (equal (uiop:getenv "TB_COMPOSITION_ROUNDTRIP") "1")
+    (tb-tests::run-composition-import-roundtrip-tests)
+    (tb-tests::run-composition-import-tests))

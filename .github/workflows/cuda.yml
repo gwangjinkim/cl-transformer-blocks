@@ -1,0 +1,55 @@
+name: Qualify CUDA on real NVIDIA hardware
+on:
+  workflow_dispatch:
+    inputs:
+      engine:
+        description: MLX CUDA wheel matching the runner driver
+        type: choice
+        options: [cuda12, cuda13]
+        default: cuda12
+permissions:
+  contents: read
+jobs:
+  cuda:
+    # Provision this trusted runner separately. This workflow does not rent hardware.
+    runs-on: [self-hosted, linux, x64, nvidia]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Record actual NVIDIA hardware and driver
+        run: nvidia-smi
+      - name: Install locked dependencies
+        env:
+          MLX_ENGINE: ${{ inputs.engine }}
+        run: uv sync --frozen --extra "$MLX_ENGINE"
+      - run: uv run --no-sync python scripts/bootstrap.py
+      - run: CARGO_TARGET_DIR=.build/tokenizer cargo test --locked --offline --manifest-path native/tokenizer/Cargo.toml
+      - name: Require working GPU inference and differentiation
+        run: uv run --no-sync python scripts/run-tests.py --device gpu
+      - name: Verify real model and export on CUDA
+        run: uv run --no-sync python scripts/run-tests.py --device gpu --real
+      - name: Verify PEFT and optimizer gradients on CUDA
+        run: uv run --no-sync python scripts/run-training-tests.py --device gpu
+      - name: Verify GPT-2 kernels and interchange
+        run: uv run --no-sync python scripts/run-gpt2-tests.py --device gpu
+      - name: Verify Qwen2 kernels, training, and PEFT interchange
+        run: uv run --no-sync python scripts/run-qwen2-tests.py --device gpu
+      - name: Verify real Qwen2.5 checkpoint on CUDA
+        run: uv run --no-sync python scripts/run-qwen2-tests.py --device gpu --real
+      - name: Verify BERT bidirectional kernels and interchange
+        run: uv run --no-sync python scripts/run-bert-tests.py --device gpu
+      - name: Verify real BERT checkpoint on CUDA
+        run: uv run --no-sync python scripts/run-bert-tests.py --device gpu --real
+      - name: Verify Python worker uses CUDA without fallback
+        run: uv run --no-sync python scripts/run-python-worker-tests.py --device gpu
+      - name: Verify portable architecture and custom-code round trip on CUDA
+        run: uv run --no-sync python scripts/run-portable-tests.py --device gpu
+      - name: Verify composed Transformer blocks and PEFT training exchange on CUDA
+        run: uv run --no-sync python scripts/run-component-lora-tests.py --device gpu
+      - name: Verify pretrained component conversion and training on CUDA
+        run: uv run --no-sync python scripts/run-composition-import-tests.py --device gpu
+      - name: Verify layer reuse, distillation, FP16/top-k, and content-addressed datasets on CUDA
+        run: uv run --no-sync python scripts/run-distillation-dataset-tests.py --device gpu --teacher-device cuda
+      - name: Verify real conversion, FP16/top-k targets, and content-addressed datasets on CUDA
+        run: uv run --no-sync python scripts/run-distillation-dataset-tests.py --device gpu --real --local-files-only --teacher-device cuda
+      - name: Record full-model CUDA baseline
+        run: uv run --no-sync python scripts/model-benchmark.py --device gpu

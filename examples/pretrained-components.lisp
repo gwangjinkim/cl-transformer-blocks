@@ -1,0 +1,20 @@
+;; After bootstrap and the pinned SmolLM2 download documented in docs/components.md.
+(load "scripts/load.lisp")
+
+(let ((source (or (uiop:getenv "TB_MODEL") ".build/models/smollm2/"))
+      (device (if (equal (uiop:getenv "TB_DEVICE") "gpu") :gpu :cpu))
+      (destination ".build/pretrained-components/"))
+  (unless (probe-file (merge-pathnames "config.json" (uiop:ensure-directory-pathname source)))
+    (error "Download the pinned model with scripts/run-composition-import-tests.py --real first, or set TB_MODEL to a local supported Llama checkpoint."))
+  (tb:with-resource (model (tb:from-pretrained source :device device))
+    (tb:save-composed-pretrained model destination :max-shard-size 16777216))
+  (tb:with-resource (model (tb:from-pretrained destination :device device))
+    (format t "~&Loaded ~D pretrained Lisp blocks.~%First block: "
+            (length (tb:transformer-blocks model)))
+    (yason:encode (tb:component-config (aref (tb:transformer-blocks model) 0)) *standard-output*)
+    (terpri)
+    (let* ((prompt "Common Lisp is a programming language")
+           (tokens (tb:encode-text model prompt :add-special-tokens nil))
+           (generated (tb:generate model tokens :max-new-tokens 16)))
+      (format t "~&~A~%" (tb:decode-tokens model generated :skip-special-tokens t)))
+    (format t "~&Saved ~A; its pretrained blocks support the native full-model and LoRA training APIs.~%" destination)))

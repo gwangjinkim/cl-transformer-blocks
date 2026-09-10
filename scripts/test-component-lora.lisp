@@ -1,0 +1,6 @@
+(load "scripts/load.lisp")
+(asdf:load-system "cl-transformer-blocks/tests")
+(load "tests/component-lora.lisp")
+(if (equal (uiop:getenv "TB_COMPONENT_LORA_PHASE") "roundtrip")
+    (tb-tests::run-component-lora-roundtrip-tests)
+    (tb-tests::run-component-lora-tests))

@@ -1,0 +1,6 @@
+(load "scripts/load.lisp")
+(asdf:load-system "cl-transformer-blocks/tests")
+(load "tests/recomposition.lisp")
+(if (equal (uiop:getenv "TB_RECOMPOSITION_ROUNDTRIP") "1")
+    (tb-tests::run-recomposition-roundtrip-tests)
+    (tb-tests::run-recomposition-tests))

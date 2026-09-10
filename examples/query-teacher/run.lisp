@@ -1,0 +1,10 @@
+(load "scripts/load.lisp")
+(load "examples/query-teacher/domain.lisp")
+(load "examples/query-teacher/training.lisp")
+(tb-query-teacher::run-demo
+ (uiop:ensure-directory-pathname (or (uiop:getenv "TB_QUERY_MODEL") ".build/models/smollm2/"))
+ (uiop:ensure-directory-pathname (or (uiop:getenv "TB_QUERY_OUTPUT") ".build/query-teacher/"))
+ (if (equal "gpu" (uiop:getenv "TB_DEVICE")) :gpu :cpu)
+ (parse-integer (or (uiop:getenv "TB_QUERY_EPOCHS") "4"))
+ (parse-integer (or (uiop:getenv "TB_QUERY_BATCH") "4"))
+ (equal "1" (uiop:getenv "TB_QUERY_SMOKE")))

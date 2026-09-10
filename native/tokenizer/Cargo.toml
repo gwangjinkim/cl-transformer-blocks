@@ -1,0 +1,12 @@
+[package]
+name = "tb-tokenizer"
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+tokenizers = { version = "=0.23.2", default-features = false, features = ["onig"] }
+serde_json = "=1.0.149"

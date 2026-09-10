@@ -1,0 +1,55 @@
+name: Reproduce Lisp query teacher
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: CPU on hosted Linux or Metal on the existing trusted Mac runner
+        type: choice
+        options: [cpu, gpu]
+        default: cpu
+      smoke:
+        description: One training step only (no quality claim); disable for full evaluation
+        type: boolean
+        default: true
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ${{ inputs.device == 'gpu' && fromJSON('["self-hosted", "macOS", "ARM64", "metal"]') || fromJSON('["ubuntu-24.04"]') }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbcl cmake build-essential
+          python3 -m pip install --user uv==0.6.4
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            uv sync --frozen --extra cpu
+          else
+            uv sync --frozen
+          fi
+      - run: uv run --no-sync python scripts/bootstrap.py
+      - name: Train in Lisp and verify in Python
+        shell: bash
+        env:
+          QUERY_DEVICE: ${{ inputs.device }}
+          QUERY_SMOKE: ${{ inputs.smoke }}
+        run: |
+          options=()
+          if [[ "$QUERY_SMOKE" == true ]]; then options+=(--smoke); fi
+          uv run --no-sync python scripts/run-query-teacher.py --download \
+            --device "$QUERY_DEVICE" --output ".build/query-teacher-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" "${options[@]}"
+      - name: Preserve experiment reports even when a verification gate fails
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: query-teacher-${{ inputs.device }}-${{ github.run_attempt }}
+          include-hidden-files: true
+          path: .build/query-teacher-${{ github.run_id }}-${{ github.run_attempt }}/*.json
+          if-no-files-found: warn

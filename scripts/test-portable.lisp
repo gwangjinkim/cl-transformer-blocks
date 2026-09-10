@@ -1,0 +1,5 @@
+(load "scripts/load.lisp")
+(asdf:load-system "cl-transformer-blocks/tests")
+(load "tests/portable.lisp")
+(setf *print-length* 5 *print-level* 4)
+(tb-tests::run-portable-tests)

@@ -1,0 +1,216 @@
+{
+  "recorded_at": "2026-09-08T19:52:38.710259+00:00",
+  "platform": "macOS-15.5-arm64-arm-64bit",
+  "machine": "arm64",
+  "processor": "Apple M3 Max",
+  "device": "cpu",
+  "repeats": 9,
+  "warmup_iterations": 10,
+  "records": [
+    {
+      "dimension": 16,
+      "c_seconds": 1.32699985988e-05,
+      "lisp_seconds": 1.35125e-05,
+      "lisp_over_c": 1.0182744104601433,
+      "raw": {
+        "c": {
+          "frontend": "c",
+          "device": "cpu",
+          "dimension": 16,
+          "iterations": 400,
+          "seconds": [
+            1.52925006114e-05,
+            1.43574993126e-05,
+            1.30324997008e-05,
+            1.27075007185e-05,
+            1.29300006665e-05,
+            1.25674996525e-05,
+            1.3330001384e-05,
+            1.32699985988e-05,
+            1.34425004944e-05
+          ],
+          "verified_value": 0.0625
+        },
+        "lisp": {
+          "seconds": [
+            1.39425e-05,
+            1.30625e-05,
+            1.3685e-05,
+            1.256e-05,
+            1.288e-05,
+            1.30675e-05,
+            1.36325e-05,
+            1.35125e-05,
+            1.38425e-05
+          ],
+          "verified_value": 0.0625,
+          "frontend": "lisp",
+          "device": "cpu",
+          "dimension": 16,
+          "iterations": 400
+        }
+      }
+    },
+    {
+      "dimension": 128,
+      "c_seconds": 1.56649993733e-05,
+      "lisp_seconds": 1.6275e-05,
+      "lisp_over_c": 1.0389403543634803,
+      "raw": {
+        "lisp": {
+          "seconds": [
+            1.6125e-05,
+            1.7245e-05,
+            1.8505e-05,
+            1.7165e-05,
+            1.6345e-05,
+            1.6235e-05,
+            1.6275e-05,
+            1.627e-05,
+            1.614e-05
+          ],
+          "verified_value": 0.0078125,
+          "frontend": "lisp",
+          "device": "cpu",
+          "dimension": 128,
+          "iterations": 200
+        },
+        "c": {
+          "frontend": "c",
+          "device": "cpu",
+          "dimension": 128,
+          "iterations": 200,
+          "seconds": [
+            1.75200030208e-05,
+            1.60550000146e-05,
+            1.56649993733e-05,
+            1.52949988842e-05,
+            1.60049973056e-05,
+            1.55000016093e-05,
+            1.60450022668e-05,
+            1.50799984112e-05,
+            1.44749972969e-05
+          ],
+          "verified_value": 0.0078125
+        }
+      }
+    },
+    {
+      "dimension": 512,
+      "c_seconds": 0.000134474993683,
+      "lisp_seconds": 0.0001366,
+      "lisp_over_c": 1.0158022414338932,
+      "raw": {
+        "c": {
+          "frontend": "c",
+          "device": "cpu",
+          "dimension": 512,
+          "iterations": 40,
+          "seconds": [
+            0.000138025009073,
+            0.000134824984707,
+            0.000130424997769,
+            0.000133325019851,
+            0.000138549995609,
+            0.000134474993683,
+            0.000134525005706,
+            0.000132224988192,
+            0.000132200005464
+          ],
+          "verified_value": 0.001953125
+        },
+        "lisp": {
+          "seconds": [
+            0.00014125,
+            0.000137575,
+            0.000143625,
+            0.000137275,
+            0.0001366,
+            0.000136475,
+            0.000132225,
+            0.00012965,
+            0.000136275
+          ],
+          "verified_value": 0.001953125,
+          "frontend": "lisp",
+          "device": "cpu",
+          "dimension": 512,
+          "iterations": 40
+        }
+      }
+    },
+    {
+      "dimension": 1024,
+      "c_seconds": 0.000803299993277,
+      "lisp_seconds": 0.0007451,
+      "lisp_over_c": 0.927548868711454,
+      "raw": {
+        "lisp": {
+          "seconds": [
+            0.00074825,
+            0.0007451,
+            0.0007785,
+            0.00075245,
+            0.0007408,
+            0.0007432,
+            0.0007381,
+            0.00077065,
+            0.00074255
+          ],
+          "verified_value": 0.0009765625,
+          "frontend": "lisp",
+          "device": "cpu",
+          "dimension": 1024,
+          "iterations": 20
+        },
+        "c": {
+          "frontend": "c",
+          "device": "cpu",
+          "dimension": 1024,
+          "iterations": 20,
+          "seconds": [
+            0.000753050018102,
+            0.000803299993277,
+            0.000743300002068,
+            0.000741499988362,
+            0.000784149998799,
+            0.000819900026545,
+            0.000883350009099,
+            0.000864200014621,
+            0.000825450010598
+          ],
+          "verified_value": 0.0009765625
+        }
+      }
+    }
+  ],
+  "sbcl": "SBCL 2.6.7",
+  "compiler": "Apple clang version 17.0.0 (clang-1700.0.13.3)",
+  "mlx": "0.32.2",
+  "cmake_build": [
+    "CMAKE_BUILD_TYPE:STRING=Release",
+    "CMAKE_C_COMPILER:STRING=/usr/bin/clang"
+  ],
+  "revision": "38751801d77cfbec39d9023a13c752141d17df01",
+  "tree_dirty": true,
+  "source_sha256": {
+    "dependencies/sources.lock.json": "cbf7c371b058b73193bfd4a8e1f9b47ab8333c5af74917e63a5fc4f145419281",
+    "native/CMakeLists.txt": "92a042eac0047bc18bf8d9ebf67c109679b79230957e2e4d703f7eb325efe56f",
+    "native/benchmark.c": "b6bc134051d4b7ab08c63669fa6e5323da9b09ca78f29fd678f57edb70ec4424",
+    "native/benchmark_api.h": "7d1a4c2138e1166ee6fb62ae8a7d277734d2107e65484bb39247fdc0432b894e",
+    "native/mlx_bridge.c": "74e4b573e2a7f1adb2c73dcffc492c5ccaa7b3de246486b2abef81e4b42f1e95",
+    "scripts/benchmark.lisp": "aeb7928687a49f9211be706ed7973f825fe3721717764438511fff8478f6d5cc",
+    "scripts/benchmark.py": "0cd9aefe24ee6168f8639bcbdfade2297a8b0334e9eb45ed253c2318d13042e8",
+    "src/adapters.lisp": "d5af974fcf8514ac0ccd5c9d89f78965cbdd405c9538897b2527b292ea8686f1",
+    "src/generation.lisp": "2416ad4e7bc5e25a96a5789d67747f4553f42849a1f1680d7bd2b45cc5283a50",
+    "src/gpt2.lisp": "252e01394e8dcd6d634f51f235d59b125dff608cd0618c696bc45eb3dd2db8e3",
+    "src/huggingface.lisp": "fcdfe632f7ff058f14385fd2b5ec89f2422054990dbdde1bd455b0aba88e9aae",
+    "src/llama.lisp": "6bb8d34f8e71545eac0c8fbc3bf54a0fc816f39567e575c1ce655859685be269",
+    "src/mlx.lisp": "f56484b4e5c39e7fe390751aa6bf447b29bd76f0076c42f16a01752eb4eec38d",
+    "src/optimizers.lisp": "1b8b083cbee39c4dc67688b0ad1c3168c70974eb51c4d13162e1fa5a2f22a653",
+    "src/package.lisp": "0581017faea27f8b1e419576d5a822e87bd3a2d759f809f40765f725bdde14e5",
+    "src/protocol.lisp": "601723813a1bbadeda57a57b59550b659a0b95e088644f26d22c1b7b0e801124",
+    "src/training.lisp": "c6623bac39126cc966c32f98b96bae3168d8862c843ceb4bd98b3f09bad96f88",
+    "uv.lock": "7e9ccccc25418c73bc6377037735fd36add67b29169117c5a62ecab19c2a92bf"
+  }
+}

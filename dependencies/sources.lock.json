@@ -1,0 +1,50 @@
+[
+  {
+    "name": "alexandria",
+    "url": "https://beta.quicklisp.org/archive/alexandria/2024-10-12/alexandria-20241012-git.tgz",
+    "directory": "alexandria-20241012-git",
+    "sha256": "dcdfc5bac229a952358dfe661f0860e8a02480e406d0d95dee4300cdc3d45b31"
+  },
+  {
+    "name": "babel",
+    "url": "https://beta.quicklisp.org/archive/babel/2026-01-01/babel-20260101-git.tgz",
+    "directory": "babel-20260101-git",
+    "sha256": "e30d399fdcdf6f540ba28185fb6d9e3ebb4219c1df314d861ef3ed26be38d08d"
+  },
+  {
+    "name": "cffi",
+    "url": "https://beta.quicklisp.org/archive/cffi/2026-01-01/cffi-20260101-git.tgz",
+    "directory": "cffi-20260101-git",
+    "sha256": "c4935fbb8ed96a062e9f2315f6566b53d3ec90a1d00c001cac908d242a8d84e6"
+  },
+  {
+    "name": "trivial-features",
+    "url": "https://beta.quicklisp.org/archive/trivial-features/2025-06-22/trivial-features-20250622-git.tgz",
+    "directory": "trivial-features-20250622-git",
+    "sha256": "d8c9686e0425ea6f2cc8e18139a80bb082c44a23ac68fd455e5c74848b42257a"
+  },
+  {
+    "name": "trivial-garbage",
+    "url": "https://beta.quicklisp.org/archive/trivial-garbage/2023-10-21/trivial-garbage-20231021-git.tgz",
+    "directory": "trivial-garbage-20231021-git",
+    "sha256": "b29529bc3615ef373bcd8705b991709939dbcdf1071da494b1bf8e33c46d006a"
+  },
+  {
+    "name": "trivial-gray-streams",
+    "url": "https://beta.quicklisp.org/archive/trivial-gray-streams/2024-10-12/trivial-gray-streams-20241012-git.tgz",
+    "directory": "trivial-gray-streams-20241012-git",
+    "sha256": "be7c33e82fdc8f4834b93b697df98a3b06486e6492928841dc26bb824d091cca"
+  },
+  {
+    "name": "yason",
+    "url": "https://beta.quicklisp.org/archive/yason/2025-06-22/yason-20250622-git.tgz",
+    "directory": "yason-20250622-git",
+    "sha256": "b086540d23e97d9898e3b0bb56b339d1ea55eef04d8407bc7db0a31b50aa5f5b"
+  },
+  {
+    "name": "mlx-c",
+    "url": "https://codeload.github.com/ml-explore/mlx-c/tar.gz/c74db5307cc8ce122f48d97ef951b30578674e7f",
+    "directory": "mlx-c-c74db5307cc8ce122f48d97ef951b30578674e7f",
+    "sha256": "f7fe562edb84da59f7d6226772a51c57bdc931503fcd0ae63c078d7390d3510b"
+  }
+]
