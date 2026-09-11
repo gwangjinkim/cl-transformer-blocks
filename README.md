@@ -2,7 +2,32 @@
 
 Common Lisp model composition with native MLX computation and standard Hugging Face checkpoints. The native adapters cover explicitly bounded Llama, Qwen2, GPT-2, and BERT masked-language-model configurations. Each adapter exposes only the inference, training, caching, tokenization, and export behavior verified for that family.
 
-This is a redesign of the earlier MGL experiment. The old implementation remains in Git history at `df2fef34ab120db9ab0ea820c71435cc4f60f2d6`; its API is replaced.
+The current MLX-based design and API replace the earlier MGL experiment.
+
+## Start here
+
+New users should begin with the **[hands-on guide](docs/hands-on-guide.md)**. It walks through installation, a first local Hugging Face model, Python round-trip verification, native LoRA training, the complete query-teacher application, unsupported and multimodal models through the Python worker, Lisp-defined architectures, publishing, resource ownership, and troubleshooting.
+
+The central distinction is explicit:
+
+| Path | Best for | Execution |
+|---|---|---|
+| **Native** | Qualified Llama, Qwen2, GPT-2, BERT masked-LM, and Lisp-defined architectures | Common Lisp model graph, MLX tensor kernels, Rust Hugging Face tokenizer; no Python inference or training |
+| **Python worker** | Other installed Transformers AutoModel classes, processors, media, advanced generation, and broader PEFT | Common Lisp controls a resident Python/PyTorch model process |
+
+Both paths read and write normal Hugging Face artifacts. Native compatibility is deliberately architecture-specific; the worker is the broader compatibility route and is never described as native execution.
+
+Bootstrap and run the small CPU acceptance suite:
+
+```sh
+git clone https://github.com/gwangjinkim/cl-transformer-blocks.git
+cd cl-transformer-blocks
+uv sync --frozen
+uv run --no-sync python scripts/bootstrap.py
+uv run --no-sync python scripts/run-tests.py --device cpu
+```
+
+Then follow the [first useful model workflow](docs/hands-on-guide.md#first-useful-model-local-text-generation-and-python-export), or run the measured [Lisp query-teacher experiment](docs/query-teacher.md).
 
 Try the [Lisp query-teacher experiment](docs/query-teacher.md): generate labeled application queries in Lisp, fine-tune SmolLM2 natively, and reload the adapter in Python. The first measured run improved exact test commands from 0/36 to 21/36; a keyword baseline still scored 35/36. The demo publishes both successes and failures and distinguishes a working training workflow from application readiness.
 
@@ -29,7 +54,7 @@ Try the [Lisp query-teacher experiment](docs/query-teacher.md): generate labeled
 
 **Native compatibility is architecture-specific.** Scaled RoPE variants, quantized checkpoints, stochastic training dropout, custom tokenizer wrappers/chat-template execution, left padding, sampling/beam search, advanced PEFT variants, mixed precision, and distributed training are future native work. Unknown native model/configuration features raise conditions and may be loaded through the explicit Python worker. Generation assets are preserved on export; the current generic implements its documented greedy arguments rather than the full Transformers generation API.
 
-MLX supports Linux CPU and CUDA as well as Apple Metal. This repository includes Linux CPU CI and a manually triggered NVIDIA qualification workflow. **CUDA and Linux execution have not yet been verified by this project.** M-series support follows actual MLX/macOS/device compatibility and test results; untested chip generations are not certified by name.
+MLX supports Linux CPU and CUDA as well as Apple Metal. The public Linux CPU suite runs in GitHub Actions, and the repository includes a manually triggered NVIDIA qualification workflow. **CUDA has not yet been verified by this project on real NVIDIA hardware.** M-series support follows actual MLX/macOS/device compatibility and test results; untested chip generations are not certified by name.
 
 ## Reproduce the build and tests
 
